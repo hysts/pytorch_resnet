@@ -3,12 +3,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 
 
 def initialize_weights(module):
     if isinstance(module, nn.Conv2d):
-        nn.init.kaiming_normal(module.weight.data, mode='fan_out')
+        nn.init.kaiming_normal_(module.weight.data, mode='fan_out')
     elif isinstance(module, nn.BatchNorm2d):
         module.weight.data.fill_(1)
         module.bias.data.zero_()
@@ -139,8 +138,7 @@ class Network(nn.Module):
             assert n_blocks_per_stage * 9 + 2 == depth
 
         n_channels = [
-            base_channels,
-            base_channels * 2 * block.expansion,
+            base_channels, base_channels * 2 * block.expansion,
             base_channels * 4 * block.expansion
         ]
 
@@ -161,9 +159,9 @@ class Network(nn.Module):
             n_channels[1], n_channels[2], n_blocks_per_stage, block, stride=2)
 
         # compute conv feature size
-        self.feature_size = self._forward_conv(
-            Variable(torch.zeros(*input_shape),
-                     volatile=True)).view(-1).shape[0]
+        with torch.no_grad():
+            self.feature_size = self._forward_conv(
+                torch.zeros(*input_shape)).view(-1).shape[0]
 
         self.fc = nn.Linear(self.feature_size, n_classes)
 
@@ -175,15 +173,12 @@ class Network(nn.Module):
         for index in range(n_blocks):
             block_name = 'block{}'.format(index + 1)
             if index == 0:
-                stage.add_module(block_name,
-                                 block(in_channels,
-                                       out_channels,
-                                       stride=stride))
+                stage.add_module(
+                    block_name, block(
+                        in_channels, out_channels, stride=stride))
             else:
                 stage.add_module(block_name,
-                                 block(out_channels,
-                                       out_channels,
-                                       stride=1))
+                                 block(out_channels, out_channels, stride=1))
         return stage
 
     def _forward_conv(self, x):
